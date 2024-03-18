@@ -2,8 +2,11 @@ import time
 import json
 import datetime
 from datetime import datetime as dt
-from datetime import timedelta as td
-from helpers import extract_file_name,read_from_s3,write_to_s3,save_job_run_details,rename_columns
+import logging
+import logging
+logger = logging.getLogger()
+logger.setLevel("INFO")
+from helpers import extract_file_name,read_from_s3,write_to_s3,save_job_run_details,rename_columns,get_mapping_tables
 from clean import trim_and_upper\
                     ,cleaning_fuel_type\
                     ,clean_transmission\
@@ -14,7 +17,9 @@ from clean import trim_and_upper\
                     ,clean_seller_type\
                     ,clean_for_duration\
                     ,clean_body_type\
-                    ,clean_data
+                    ,clean_data\
+                    ,cleaningSpec\
+                    ,cleaningModel
 
 cleaning_functions = {
     'make':trim_and_upper
@@ -35,28 +40,39 @@ cleaning_functions = {
     ,'service_contract_untill_when': clean_for_duration
     ,'hp': cleaning_hp
     ,'body_type': clean_body_type
+    ,'spec': cleaningSpec
+    ,'model':  cleaningModel
 }
 
-# replace by env's
+# needs to be replace by env's
 destination_bucket = "raw-autodata-vd-ml-data"
 destination_prefix = "zyte_feed"
 lambda_job_id = "lambda-cleaning-job"
 dynamodb_table = "lambda_run_details"
+secret = "prod/auto-data/vd-readonly"
+region = "ap-south-1"
 
 
 def lambda_handler(event, context):
+    logger.info("======== Executing lambda function ========")
+    res = {}
+    car_data = []
     
     # time for dynamodb logging
     job_start_time = int(time.mktime(dt.now().timetuple()))
     start_time = datetime.datetime.now()
     
-    bucket_name = json.loads(json.loads(event["Records"][0]["body"])["Message"])["Records"][0]["s3"]["bucket"]["name"]
-    bucket_key = json.loads(json.loads(event["Records"][0]["body"])["Message"])["Records"][0]["s3"]["object"]["key"]
-    car_data = read_from_s3(bucket_name,bucket_key)
+    try:
+        bucket_name = json.loads(json.loads(event["Records"][0]["body"])["Message"])["Records"][0]["s3"]["bucket"]["name"]
+        bucket_key = json.loads(json.loads(event["Records"][0]["body"])["Message"])["Records"][0]["s3"]["object"]["key"]
+        car_data = read_from_s3(bucket_name,bucket_key)
+    except Exception as e:
+        print("Error reading from S3",e)
     
     if car_data:
         cols_renamed = rename_columns(car_data)
-        cleaned_data = clean_data(cols_renamed,cleaning_functions)
+        mapping_tables = get_mapping_tables(secret,region)
+        cleaned_data = clean_data(cols_renamed,cleaning_functions,mapping_tables)
         file_name = extract_file_name(bucket_key)
         res = write_to_s3(cleaned_data,destination_bucket,destination_prefix,file_name)
     
