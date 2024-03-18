@@ -14,6 +14,14 @@ from helpers import  count_months\
                     ,custom_sort
                     
 def clean_data(data,cleaning_functions,mapping_tables):
+    """
+    Apply cleaning functions depending upon attribute name
+
+    Args:
+        data: list of dictionaries car data
+        cleaning_functions : dictionary of column name as key and function name as value
+        mapping_tables : list of dictionaries of backbone mapping tables
+    """
     try:
         logging.info("======== Starting the data cleaning process ========")
         for car in data:
@@ -38,6 +46,12 @@ def clean_data(data,cleaning_functions,mapping_tables):
 
 
 def trim_and_upper(input_string):
+    """
+    Trim and convert to upper case
+
+    Args:
+        input_string : column  value from car data
+    """
     try:
         # Check if input is string and not empty
         if input_string and isinstance(input_string,str):
@@ -55,6 +69,13 @@ def trim_and_upper(input_string):
 
 
 def cleaning_fuel_type(fuel_type):
+    """
+    Clean  Fuel Type field by replacing 
+    values with correct form of the fuel type
+
+    Args:
+        fuel_type : fuel type from car data
+    """
     try:
         if fuel_type and isinstance(fuel_type,str):
             fuel_type = fuel_type.strip(" ")
@@ -68,6 +89,13 @@ def cleaning_fuel_type(fuel_type):
 
 
 def clean_transmission(transmission):
+    """
+    Clean  Transmission Field by replacing  
+    values with correct form of the transmission
+    
+    Args:
+        transmission : transmission type from car data
+    """
     try:
         if transmission and isinstance(transmission,str):                      
             transmission = transmission.strip()    
@@ -82,6 +110,13 @@ def clean_transmission(transmission):
 
 
 def clean_engine_size(engine_size):
+    """
+    Clean Engine Size filed by adding 
+    liters to end of  numeric value
+
+    Args:
+        engine_size : engine size of the car in liters
+    """
     try:
         if engine_size and isinstance(engine_size, str):
             engine_size = str(engine_size).strip()
@@ -107,6 +142,13 @@ def clean_engine_size(engine_size):
 
 
 def clean_cylinders(cylinders):
+    """
+       Clean cylinders column value by
+       replace string  with empty string
+
+    Args:
+        cylinders : numbre of cylinders car engine have
+    """
     try:
         if cylinders and isinstance(cylinders, str):
             cylinders = cylinders.replace('Cyl', '').strip().upper() # Remove 'Cyl' and clean input
@@ -118,6 +160,14 @@ def clean_cylinders(cylinders):
 
 
 def cleaning_hp(hp):
+    """
+    Clean horse power column of car data
+    by removing unnecessary characters and
+    adding HP at the end of number or string
+
+    Args:
+        hp : horse power of the car
+    """
     try:
         if hp:
             if isinstance(hp, (int, float)):
@@ -147,6 +197,14 @@ def cleaning_hp(hp):
 
 
 def clean_by_type(value, type_str):
+    """
+    Clean  a specific field based on its type
+    type can be doors,seats,gears
+
+    Args:
+        value : different type of car parts
+        type_str : car parts such as door,seat,gear
+    """
     try:
         # Check if value exists
         if value and isinstance(value,str) and '+' not in value:
@@ -180,6 +238,12 @@ def clean_by_type(value, type_str):
 
 
 def clean_seller_type(seller_type):
+    """
+    Clean  seller type by replace values
+    from a seller type dict in config
+    Args:
+        seller_type : car seller type
+    """
     try:
         if seller_type:
         
@@ -203,6 +267,11 @@ def clean_seller_type(seller_type):
 
 
 def clean_for_duration(line):
+    """Find out car warranty duration in months
+
+    Args:
+        line : dates of car warranty
+    """
     try:
         if line and isinstance(line, str):
             line = line.strip().lower()
@@ -269,6 +338,15 @@ def clean_body_type(body_type):
         return body_type
 
 def cleaningModel(model,make,dataToMap):
+    """
+    Clean the model of the car by matching
+    value in the backbone tables for mapping
+
+    Args:
+        model : model of the car
+        make : make of the car
+        dataToMap : mapping tables in backbone db
+    """
     try:
         if model and make:
             model = model.strip().upper()
@@ -391,6 +469,16 @@ def cleaningModel(model,make,dataToMap):
 
 
 def cleaningSpec(spec,make,dataToMap):
+    """
+    Clean specification of car by matching
+    it with different mapping tables in the
+    backbone database
+
+    Args:
+        spec : specification of the car
+        make : make of the car
+        dataToMap : mapping tables in backbone db
+    """
     try:
         if spec and make:
             spec = spec.strip().upper()
