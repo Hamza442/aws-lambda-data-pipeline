@@ -82,27 +82,24 @@ def read_from_s3(bucket_name, s3_key):
 
 
 def write_to_s3(data, bucket_name, key_prefix, file_name):
-    try:
-        logging.info("======== Writing data to s3 ========")
-        json_data = json.dumps(data)
-        compressed_data = gzip.compress(json_data.encode('utf-8'))
-        
-        current_date = datetime.now()
-        year = current_date.strftime('%Y')
-        month = current_date.strftime('%m')
-        day = current_date.strftime('%d')
-            
-        s3_key = f"{key_prefix}/year={year}/month={month}/day={day}/{file_name}.json.gz"
-        upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
+    logging.info("======== Writing data to s3 ========")
+    json_data = json.dumps(data)
+    compressed_data = gzip.compress(json_data.encode('utf-8'))
 
-        logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
-        
-        return {
-            'destination_file_name': f"s3://{s3_key}",
-            'status_code': upload_res['ResponseMetadata']['HTTPStatusCode']
-        }
-    except Exception as e:
-        logging.exception("Error while writing data to s3 = ", e)
+    current_date = datetime.now()
+    year = current_date.strftime('%Y')
+    month = current_date.strftime('%m')
+    day = current_date.strftime('%d')
+
+    s3_key = f"{key_prefix}/year={year}/month={month}/day={day}/{file_name}.json.gz"
+    upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
+
+    logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
+
+    return {
+        'destination_file_name': f"s3://{s3_key}",
+        'status_code': upload_res['ResponseMetadata']['HTTPStatusCode']
+    }
 
 
 def count_months(date):
