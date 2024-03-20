@@ -76,9 +76,16 @@ def extract_file_name(string):
 def read_from_s3(bucket_name, s3_key):
     logging.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")
     response = s3.get_object(Bucket=bucket_name, Key=s3_key)
-    json_data = response['Body'].read().decode('utf-8')
+    res = response['Body'].iter_lines()
     logging.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
-    return json.loads(json_data)
+    return res
+
+def parse_s3_response(lines):
+    data = []
+    for line in lines:
+        json_data = json.loads(line.decode('utf-8'))
+        data.append(json_data)
+    return data
 
 
 def write_to_s3(data, bucket_name, key_prefix, file_name):
