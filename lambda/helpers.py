@@ -76,17 +76,9 @@ def extract_file_name(string):
 def read_from_s3(bucket_name, s3_key):
     logging.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")
     response = s3.get_object(Bucket=bucket_name, Key=s3_key)
-    data = response['Body'].iter_lines()
+    json_data = response['Body'].read().decode('utf-8')
     logging.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
-    return data
-
-
-def parse_s3_response(lines):
-    data = []
-    for line in lines:
-        json_data = json.loads(line.decode('utf-8'))
-        data.append(json_data)
-    return data
+    return json.loads(json_data)
 
 
 def write_to_s3(data, bucket_name, key_prefix, file_name):
@@ -99,7 +91,7 @@ def write_to_s3(data, bucket_name, key_prefix, file_name):
     month = current_date.strftime('%m')
     day = current_date.strftime('%d')
 
-    s3_key = f"{key_prefix}/year={year}/month={month}/day={day}/{file_name}.jsonl.gz"
+    s3_key = f"{key_prefix}/year={year}/month={month}/day={day}/{file_name}.json.gz"
     upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
 
     logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
