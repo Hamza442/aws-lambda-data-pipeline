@@ -66,7 +66,8 @@ fields_data = {
 }
 
 seller_type_config = {
-    'franchise_keys': ['official dealer', 'official dealers', 'dealership/certified pre-owned', 'dealership', 'certified pre-owned'],
+    'franchise_keys':
+        ['official dealer', 'official dealers', 'dealership/certified pre-owned', 'dealership', 'certified pre-owned'],
     'independent_keys': ['independent dealer', 'dealer', 'independent dealers'],
     'large_independent_keys': ['large independent dealer', 'large independent dealers'],
     'owner_keys': ['owner'],
@@ -76,4 +77,4 @@ seller_type_config = {
     'owner_value': 'Owner'
 }
 
-excluded_words = ['4Wd','2WD','AWD','2X2','4X4','4X2','FWD']
+excluded_words = ['4Wd', '2WD', 'AWD', '2X2', '4X4', '4X2', 'FWD']
