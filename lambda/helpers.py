@@ -63,9 +63,9 @@ def rename_columns(data):
     return [{fields_data.get(key, key): value for key, value in item.items()} for item in data]
 
 
-def extract_file_name(string):
+def extract_event_name(string):
 
-    pattern = r'/([^/]+)\.json$'
+    pattern = r"(.+?)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d+\.jsonlines"
     match = re.search(pattern, string)
     if match:
         return match.group(1)
@@ -88,7 +88,7 @@ def parse_s3_response(lines):
     return data
 
 
-def write_to_s3(data, bucket_name, key_prefix, file_name):
+def write_to_s3(data, bucket_name, key_prefix, event_name):
     logging.info("======== Writing data to s3 ========")
     json_data = json.dumps(data)
     compressed_data = gzip.compress(json_data.encode('utf-8'))
@@ -97,8 +97,9 @@ def write_to_s3(data, bucket_name, key_prefix, file_name):
     year = current_date.strftime('%Y')
     month = current_date.strftime('%m')
     day = current_date.strftime('%d')
+    file_name =  f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
 
-    s3_key = f"{key_prefix}/year={year}/month={month}/day={day}/{file_name}.json.gz"
+    s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/{file_name}.json.gz"
     upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
 
     logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
