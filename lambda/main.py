@@ -4,7 +4,7 @@ import datetime
 from datetime import datetime as dt
 import logging
 from helpers import extract_file_name, read_from_s3, write_to_s3, save_job_run_details, rename_columns,\
-    get_mapping_tables
+    get_mapping_tables,parse_s3_response
 from clean import trim_and_upper, cleaning_fuel_type, clean_transmission, clean_engine_size, clean_cylinders,\
     cleaning_hp, clean_by_type, clean_seller_type, clean_for_duration, clean_body_type, clean_data, cleaning_spec\
     , cleaningModel
@@ -63,7 +63,8 @@ def process_file(bucket, key):
         job_start_time = int(time.mktime(dt.now().timetuple()))
         start_time = datetime.datetime.now()
         # Reading file
-        car_data = read_from_s3(bucket, key)
+        res = read_from_s3(bucket, key)
+        car_data = parse_s3_response(res)
         cols_renamed = rename_columns(car_data)
         mapping_tables = get_mapping_tables(secret, region)
         cleaned_data = clean_data(cols_renamed, cleaning_functions, mapping_tables)
