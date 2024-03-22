@@ -59,8 +59,9 @@ def get_mapping_table_desc(sql_hostname, sql_username, sql_password, sql_main_da
     return data['description'].tolist()
 
 
-def rename_columns(data):
-    return [{fields_data.get(key, key): value for key, value in item.items()} for item in data]
+def rename_columns(contents):
+    return [{fields_data.get(key, key): value for key, value in json.loads(item.decode('utf-8')).items()}
+            for item in contents]
 
 
 def extract_event_name(string):
@@ -73,19 +74,12 @@ def extract_event_name(string):
         return str(uuid.uuid4())
 
 
-def read_from_s3(bucket_name, s3_key):
+def read_file_contents_from_s3(bucket_name, s3_key):
     logging.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")
     response = s3.get_object(Bucket=bucket_name, Key=s3_key)
-    res = response['Body'].iter_lines()
+    iterator = response['Body'].iter_lines()
     logging.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
-    return res
-
-def parse_s3_response(lines):
-    data = []
-    for line in lines:
-        json_data = json.loads(line.decode('utf-8'))
-        data.append(json_data)
-    return data
+    return iterator
 
 
 def write_to_s3(data, bucket_name, key_prefix, event_name):
@@ -176,7 +170,7 @@ def save_job_run_details(job_id, job_start_time, source_file, destination_file, 
         logging.exception("Error while writing to dynamodb", e)
 
 
-def get_key(search_string,models):
+def get_key(search_string, models):
     return models.index(search_string.upper()) if search_string.upper() in models else False
 
  
