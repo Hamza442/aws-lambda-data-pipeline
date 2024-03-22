@@ -2,6 +2,7 @@ import re
 import os
 import json
 import boto3
+import pytz
 import gzip
 import uuid
 import logging
@@ -64,14 +65,11 @@ def rename_columns(contents):
             for item in contents]
 
 
-def extract_event_name(string):
+def extract_event_name(event_string):
 
-    pattern = r"(.+?)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d+\.jsonlines"
-    match = re.search(pattern, string)
-    if match:
-        return match.group(1)
-    else:
-        return str(uuid.uuid4())
+    parts = event_string.split('/')
+    event_name = parts[2].lower()
+    return event_name
 
 
 def read_file_contents_from_s3(bucket_name, s3_key):
@@ -87,13 +85,14 @@ def write_to_s3(data, bucket_name, key_prefix, event_name):
     json_data = json.dumps(data)
     compressed_data = gzip.compress(json_data.encode('utf-8'))
 
-    current_date = datetime.now()
+    current_date = datetime.now(pytz.utc)
     year = current_date.strftime('%Y')
     month = current_date.strftime('%m')
     day = current_date.strftime('%d')
+    hour = current_date.strftime('%H')
     file_name =  f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
 
-    s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/{file_name}.json.gz"
+    s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/hour={hour}/{file_name}.json.gz"
     upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
 
     logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")

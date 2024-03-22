@@ -67,7 +67,7 @@ def process_file(bucket, key):
         cols_renamed = rename_columns(contents)
         mapping_tables = get_mapping_tables(secret, region)
         cleaned_data = clean_data(cols_renamed, cleaning_functions, mapping_tables)
-        event_name = extract_event_name(bucket)
+        event_name = extract_event_name(key)
         response = write_to_s3(cleaned_data, destination_bucket, destination_prefix, event_name)
         # time for dynamodb logging
         end_time = datetime.datetime.now()
