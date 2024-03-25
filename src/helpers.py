@@ -4,7 +4,6 @@ import json
 import boto3
 import pytz
 import gzip
-import uuid
 import logging
 import pymysql
 import paramiko
@@ -15,20 +14,10 @@ from conf import fields_data
 from sshtunnel import SSHTunnelForwarder
 from botocore.exceptions import ClientError
 
-s3 = boto3.client('s3')
-# Replace with environment variable or configs
-rds_pem_key = "prod/rds-pem"
-pem_key_region = "ap-south-1"
-HOST = "127.0.0.1"
 
-ACCESS_KEY = os.environ['aws_access_key']
-SECRET_KEY = os.environ['aws_secret_key']
+def get_secret(secret, region, aws_access_key, aws_secret_key):
 
-
-def get_secret(secret, region):
-
-    session = boto3.session.Session(aws_access_key_id=ACCESS_KEY
-                                    ,aws_secret_access_key=SECRET_KEY)
+    session = boto3.session.Session(aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
     client = session.client(
         service_name='secretsmanager',
         region_name=region
@@ -44,16 +33,17 @@ def get_secret(secret, region):
     return get_secret_value_response['SecretString']
 
 
-def get_mapping_table_desc(sql_hostname, sql_username, sql_password, sql_main_database, sql_port, ssh_host, ssh_user,
-                           ssh_port, table):
+def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: str, sql_main_database: str,
+                           sql_port: str, ssh_host: str, ssh_user: str, ssh_port: str, table: str, host: str,
+                           aws_access_key: str, aws_secret_key: str, rds_pem_key: str, region: str):
     
-    rds_key = get_secret(rds_pem_key, pem_key_region)
+    rds_key = get_secret(rds_pem_key, region, aws_access_key, aws_secret_key)
     myp_key = paramiko.RSAKey.from_private_key(StringIO(rds_key))
 
     with SSHTunnelForwarder((ssh_host, ssh_port), ssh_username=ssh_user, ssh_pkey=myp_key,
                             remote_bind_address=(sql_hostname, sql_port)) as tunnel:
         conn = pymysql.connect(
-            host=HOST, user=sql_username, passwd=sql_password, db=sql_main_database, port=tunnel.local_bind_port)
+            host=host, user=sql_username, passwd=sql_password, db=sql_main_database, port=tunnel.local_bind_port)
         query = "SELECT DISTINCT description FROM {};".format(table)
         data = pd.read_sql_query(query, conn)
         conn.close()
@@ -72,15 +62,15 @@ def extract_event_name(event_string):
     return event_name
 
 
-def read_file_contents_from_s3(bucket_name, s3_key):
+def read_file_contents_from_s3(bucket_name: str, s3_key: str, s3_client):
     logging.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")
-    response = s3.get_object(Bucket=bucket_name, Key=s3_key)
+    response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
     iterator = response['Body'].iter_lines()
     logging.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
     return iterator
 
 
-def write_to_s3(data, bucket_name, key_prefix, event_name):
+def write_to_s3(s3_client, data, bucket_name, key_prefix, event_name):
     logging.info("======== Writing data to s3 ========")
     json_data = json.dumps(data)
     compressed_data = gzip.compress(json_data.encode('utf-8'))
@@ -90,10 +80,10 @@ def write_to_s3(data, bucket_name, key_prefix, event_name):
     month = current_date.strftime('%m')
     day = current_date.strftime('%d')
     hour = current_date.strftime('%H')
-    file_name =  f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
+    file_name = f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
 
     s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/hour={hour}/{file_name}.json.gz"
-    upload_res = s3.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
+    upload_res = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
 
     logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
 
@@ -202,15 +192,16 @@ def get_new_descriptions(data):
     return result
 
 
-def get_mapping_tables(secret, region):
+def get_mapping_tables(secret, region, aws_access_key, aws_secret_key, host, rds_pem_key):
     tables = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
-    secrets = json.loads(get_secret(secret, region))
+    secrets = json.loads(get_secret(secret, region, aws_access_key, aws_secret_key))
     mapping_dict = {}
     try:
         for table_name in tables:
             mapping_dict[table_name] = get_mapping_table_desc(
                 secrets['host'], secrets['username'], secrets['password'], secrets['database'], int(secrets['port']),
-                secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), table_name)
+                secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), table_name, host,
+                aws_access_key, aws_secret_key, rds_pem_key, region)
         return mapping_dict
     except Exception as e:
         logging.exception("Error while reading making tables", e)
