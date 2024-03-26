@@ -67,7 +67,7 @@ def cleaning_fuel_type(fuel_type):
         fuel_type : fuel type from car data
     """
     try:
-        if fuel_type and isinstance(fuel_type,str):
+        if fuel_type and isinstance(fuel_type, str):
             fuel_type = fuel_type.strip(" ")
             if fuel_type.lower() == 'petrol/lpg' or fuel_type.lower() == 'gasoline':
                 fuel_type = 'PETROL'
@@ -124,7 +124,7 @@ def clean_engine_size(engine_size):
                     else:
                         engine_size = str(engine_size)+" L"
         else:
-            if isinstance(engine_size,int) and float(engine_size)>0.0:
+            if isinstance(engine_size, int) and float(engine_size) > 0.0:
                 engine_size = str(float(engine_size))+" L"
     except Exception as e:
         logging.exception(f"Error: {e} === Value: {engine_size}")
@@ -142,8 +142,8 @@ def clean_cylinders(cylinders):
     """
     try:
         if cylinders and isinstance(cylinders, str):
-            cylinders = cylinders.replace('Cyl', '').strip().upper() # Remove 'Cyl' and clean input
-            return cylinders # Return cleaned input
+            cylinders = cylinders.replace('Cyl', '').strip().upper()  # Remove 'Cyl' and clean input
+            return cylinders  # Return cleaned input
         return cylinders
     except Exception as e:
         logging.exception(f"Error: {e} === Value: {cylinders}")
@@ -267,7 +267,7 @@ def clean_for_duration(line):
             if 'years' in line or 'year' in line:
                 years = extract_numbers(line)
                 return str(int(years)*12)+" MONTHS"
-            if  'months' in line or 'month' in line:
+            if 'months' in line or 'month' in line:
                 months = extract_numbers(line)
                 return months+" MONTHS"
             if 'valid till' in line:
@@ -326,7 +326,7 @@ def clean_body_type(body_type):
         return body_type
 
 
-def cleaningModel(model, make, dataToMap):
+def cleaning_model(model, make, data_to_map):
     """
     Clean the model of the car by matching
     value in the backbone tables for mapping
@@ -334,12 +334,12 @@ def cleaningModel(model, make, dataToMap):
     Args:
         model : model of the car
         make : make of the car
-        dataToMap : mapping tables in backbone db
+        data_to_map : mapping tables in backbone db
     """
     try:
         if model and make:
             model = model.strip().upper()
-            mapping_data = dataToMap['bb_model']
+            mapping_data = data_to_map['bb_model']
             
             models = list(map(str.upper, mapping_data))
             
@@ -347,8 +347,8 @@ def cleaningModel(model, make, dataToMap):
                 return model
                 
             pieces = model.split(' ')
-            if len(pieces)>2:
-                key = get_key(pieces[0]+pieces[1]+" "+pieces[2],models)
+            if len(pieces) > 2:
+                key = get_key(pieces[0]+pieces[1]+" "+pieces[2], models)
                 if key:
                     return models[key]
                 key = get_key(pieces[0]+" "+pieces[1]+pieces[2], models)
@@ -403,17 +403,17 @@ def cleaningModel(model, make, dataToMap):
                     if matches:
                         return matches[0].upper().strip()
                         
-            makes = dataToMap['bb_make']
+            makes = data_to_map['bb_make']
             makes = list(set(makes))
             model = remove_makes(model, makes)
             if model in models:
                 return model
 
-            fuel_types = dataToMap['bb_fuel']
-            engine_sizes = dataToMap['bb_enginesize']
-            body_types = dataToMap['bb_body']
-            hps = dataToMap['bb_hp']
-            specs = dataToMap['bb_specifications']
+            fuel_types = data_to_map['bb_fuel']
+            engine_sizes = data_to_map['bb_enginesize']
+            body_types = data_to_map['bb_body']
+            hps = data_to_map['bb_hp']
+            specs = data_to_map['bb_specifications']
 
             engines = [size.replace(" ", "") for size in engine_sizes]
             array_to_search_and_remove = fuel_types+engine_sizes+body_types+engines+hps
@@ -435,7 +435,7 @@ def cleaningModel(model, make, dataToMap):
                                 model = model.replace(result, "").strip()
                             break
             
-            if model.replace("  "," ") in models:
+            if model.replace("  ", " ") in models:
                 return model
                 
             if make.lower() == 'toyota':
@@ -478,28 +478,28 @@ def cleaning_spec(spec, make, data_to_map):
                 return spec
                 
             pieces = spec.split(' ')
-            if len(pieces)>2:
-                key = get_key(pieces[0]+pieces[1]+" "+pieces[2],specs)
+            if len(pieces) > 2:
+                key = get_key(pieces[0]+pieces[1]+" "+pieces[2], specs)
                 if key:
                     return specs[key]
-                key = get_key(pieces[0]+" "+pieces[1]+pieces[2],specs)
+                key = get_key(pieces[0]+" "+pieces[1]+pieces[2], specs)
                 if key:
                     return specs[key]
-                key = get_key(pieces[0]+"-"+pieces[1]+" "+pieces[2],specs)
+                key = get_key(pieces[0]+"-"+pieces[1]+" "+pieces[2], specs)
                 if key:
                     return specs[key]
-                key = get_key(pieces[0]+" "+pieces[1]+"-"+pieces[2],specs)
+                key = get_key(pieces[0]+" "+pieces[1]+"-"+pieces[2], specs)
                 if key:
                     return specs[key]
             
-            if len(pieces)>1:
-                key = get_key(pieces[0]+pieces[1],specs)
+            if len(pieces) > 1:
+                key = get_key(pieces[0]+pieces[1], specs)
                 if key:
                     return specs[key]
-                key = get_key(pieces[0]+" "+pieces[1],specs)
+                key = get_key(pieces[0]+" "+pieces[1], specs)
                 if key:
                     return specs[key]
-                key = get_key(pieces[0]+"-"+pieces[1],specs)
+                key = get_key(pieces[0]+"-"+pieces[1], specs)
                 if key:
                     return specs[key]
 
@@ -527,7 +527,7 @@ def cleaning_spec(spec, make, data_to_map):
                     single_spec = [item['value'] for item in possible_specs]
                     return single_spec[0]
                 spec_array = sorted(possible_specs, key=custom_sort, reverse=True)
-                spec_array = list(set(item['value'] for item in possible_specs))
+                spec_array = list(set(item['value'] for item in spec_array))
                 for value in spec_array:
                     regex = r'\b({})\b'.format(value)
                     matches = re.findall(regex, spec, re.IGNORECASE)

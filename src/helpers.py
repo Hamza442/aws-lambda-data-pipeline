@@ -1,10 +1,6 @@
 import re
-import os
 import json
 import boto3
-import pytz
-import gzip
-import logging
 import pymysql
 import paramiko
 from io import StringIO
@@ -12,25 +8,25 @@ import pandas as pd
 from datetime import datetime
 from conf import fields_data
 from sshtunnel import SSHTunnelForwarder
-from botocore.exceptions import ClientError
 
 
 def get_secret(secret, region, aws_access_key, aws_secret_key):
-
     session = boto3.session.Session(aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
-    client = session.client(
-        service_name='secretsmanager',
-        region_name=region
-    )
+    client = session.client(service_name='secretsmanager', region_name=region)
+    response = client.get_secret_value(SecretId=secret)
+    return response['SecretString']
 
-    try:
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret
-        )
-    except ClientError as e:
-        raise e
 
-    return get_secret_value_response['SecretString']
+def get_mapping_tables(secret, region, aws_access_key, aws_secret_key, host, rds_pem_key):
+    tables = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
+    secrets = json.loads(get_secret(secret, region, aws_access_key, aws_secret_key))
+    mapping_dict = {}
+    for table_name in tables:
+        mapping_dict[table_name] = get_mapping_table_desc(
+            secrets['host'], secrets['username'], secrets['password'], secrets['database'], int(secrets['port']),
+            secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), table_name, host,
+            aws_access_key, aws_secret_key, rds_pem_key, region)
+    return mapping_dict
 
 
 def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: str, sql_main_database: str,
@@ -39,7 +35,6 @@ def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: s
     
     rds_key = get_secret(rds_pem_key, region, aws_access_key, aws_secret_key)
     myp_key = paramiko.RSAKey.from_private_key(StringIO(rds_key))
-
     with SSHTunnelForwarder((ssh_host, ssh_port), ssh_username=ssh_user, ssh_pkey=myp_key,
                             remote_bind_address=(sql_hostname, sql_port)) as tunnel:
         conn = pymysql.connect(
@@ -56,60 +51,24 @@ def rename_columns(contents):
 
 
 def extract_event_name(event_string):
-
     parts = event_string.split('/')
     event_name = parts[2].lower()
     return event_name
 
 
-def read_file_contents_from_s3(bucket_name: str, s3_key: str, s3_client):
-    logging.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")
-    response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-    iterator = response['Body'].iter_lines()
-    logging.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
-    return iterator
-
-
-def write_to_s3(s3_client, data, bucket_name, key_prefix, event_name):
-    logging.info("======== Writing data to s3 ========")
-    json_data = json.dumps(data)
-    compressed_data = gzip.compress(json_data.encode('utf-8'))
-
-    current_date = datetime.now(pytz.utc)
-    year = current_date.strftime('%Y')
-    month = current_date.strftime('%m')
-    day = current_date.strftime('%d')
-    hour = current_date.strftime('%H')
-    file_name = f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
-
-    s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/hour={hour}/{file_name}.json.gz"
-    upload_res = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
-
-    logging.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
-
-    return {
-        'destination_file_name': f"s3://{s3_key}",
-        'status_code': upload_res['ResponseMetadata']['HTTPStatusCode']
-    }
-
-
 def count_months(date):
-    
     current_date = datetime.now().date()
     year1 = current_date.year
     year2 = date.year
     month1 = current_date.month
     month2 = date.month
     diff = ((year2 - year1) * 12) + (month2 - month1)
-    
     return str(diff)
 
 
 def extract_numbers(input_string):
-
     pattern = r'[-+]?\d*\.?\d+'
     numbers = re.findall(pattern, input_string)
-    
     return [num for num in numbers][0]
 
 
@@ -132,31 +91,7 @@ def parse_date(date_string):
         # If none of the formats work, raise an exception or return None
         raise ValueError("Date string does not match any known format = ", date_string)
     except Exception as e:
-        logging.exception(e)
         return False
-
-  
-def save_job_run_details(job_id, job_start_time, source_file, destination_file, start_time, end_time,
-                         total_execution_time, status_code, dynamodb_table):
-    try:
-        logging.info("======== Writing lambda run details to dynamodb ========")
-        dynamodb = boto3.resource('dynamodb')
-        job_run_details_item = {
-            'job_id': job_id,
-            'job_start_time': job_start_time,
-            'source_file': source_file,
-            'destination_file': destination_file,
-            'start_time': str(start_time),
-            'end_time': str(end_time),
-            'total_execution_time': str(total_execution_time) + " seconds",
-            'status_code': status_code,
-            'created_at': str(datetime.now())
-        }
-        job_run_details_table = dynamodb.Table(dynamodb_table)
-        job_run_details_table.put_item(Item=job_run_details_item)
-        logging.info(f"Lambda run details inserted to dynamodb table : {dynamodb_table}")
-    except Exception as e:
-        logging.exception("Error while writing to dynamodb", e)
 
 
 def get_key(search_string, models):
@@ -190,18 +125,3 @@ def get_new_descriptions(data):
     new_descriptions = [desc.replace(' ', '').replace('-', '') for desc in data]
     result = [{desc: new_desc} for desc, new_desc in zip(data, new_descriptions)]
     return result
-
-
-def get_mapping_tables(secret, region, aws_access_key, aws_secret_key, host, rds_pem_key):
-    tables = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
-    secrets = json.loads(get_secret(secret, region, aws_access_key, aws_secret_key))
-    mapping_dict = {}
-    try:
-        for table_name in tables:
-            mapping_dict[table_name] = get_mapping_table_desc(
-                secrets['host'], secrets['username'], secrets['password'], secrets['database'], int(secrets['port']),
-                secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), table_name, host,
-                aws_access_key, aws_secret_key, rds_pem_key, region)
-        return mapping_dict
-    except Exception as e:
-        logging.exception("Error while reading making tables", e)

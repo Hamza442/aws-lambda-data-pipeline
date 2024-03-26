@@ -2,7 +2,7 @@ import os
 import logging
 import boto3
 from clean import trim_and_upper, cleaning_fuel_type, clean_transmission, clean_engine_size, clean_cylinders,\
-    cleaning_hp, clean_by_type, clean_seller_type, clean_for_duration, clean_body_type, cleaning_spec, cleaningModel
+    cleaning_hp, clean_by_type, clean_seller_type, clean_for_duration, clean_body_type, cleaning_spec, cleaning_model
 from src.event_processor import EventProcessor
 
 cleaning_functions = {
@@ -25,7 +25,7 @@ cleaning_functions = {
     'hp': cleaning_hp,
     'body_type': clean_body_type,
     'spec': cleaning_spec,
-    'model': cleaningModel
+    'model': cleaning_model
 }
 
 # Replace with environment variable or configs
@@ -42,6 +42,7 @@ ACCESS_KEY = os.environ['aws_access_key']
 SECRET_KEY = os.environ['aws_secret_key']
 
 s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
 logger = logging.getLogger()
 logger.setLevel("INFO")
 
@@ -49,6 +50,6 @@ logger.setLevel("INFO")
 def lambda_handler(event, context):
     processor: EventProcessor = EventProcessor(
         s3, ACCESS_KEY, SECRET_KEY, destination_prefix, destination_bucket, secret, region, rds_pem_key, lambda_job_id,
-        dynamodb_table, HOST, cleaning_functions, logger)
+        dynamodb_table, HOST, cleaning_functions, dynamodb, logger)
     processor.process_event(event)
 
