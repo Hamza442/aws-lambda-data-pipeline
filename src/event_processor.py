@@ -78,12 +78,10 @@ class EventProcessor(ABC):
         json_data = json.dumps(data)
         compressed_data = gzip.compress(json_data.encode('utf-8'))
         current_date = datetime.now(pytz.utc)
-        year = current_date.strftime('%Y')
-        month = current_date.strftime('%m')
-        day = current_date.strftime('%d')
+        date = current_date.strftime("%Y-%m-%d")
         hour = current_date.strftime('%H')
         file_name = f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
-        s3_key = f"{key_prefix}/{event_name}/year={year}/month={month}/day={day}/hour={hour}/{file_name}.json.gz"
+        s3_key = f"{key_prefix}/{event_name}/date={date}/hour={hour}/{file_name}.json.gz"
         upload_res = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
         self.logger.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
         return {

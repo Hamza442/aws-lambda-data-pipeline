@@ -1,6 +1,11 @@
 import re
+import os
 import json
 import boto3
+import pytz
+import gzip
+import uuid
+import logging
 import pymysql
 import paramiko
 from io import StringIO
@@ -32,7 +37,7 @@ def get_mapping_tables(secret, region, aws_access_key, aws_secret_key, host, rds
 def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: str, sql_main_database: str,
                            sql_port: str, ssh_host: str, ssh_user: str, ssh_port: str, table: str, host: str,
                            aws_access_key: str, aws_secret_key: str, rds_pem_key: str, region: str):
-    
+
     rds_key = get_secret(rds_pem_key, region, aws_access_key, aws_secret_key)
     myp_key = paramiko.RSAKey.from_private_key(StringIO(rds_key))
     with SSHTunnelForwarder((ssh_host, ssh_port), ssh_username=ssh_user, ssh_pkey=myp_key,
@@ -52,7 +57,7 @@ def rename_columns(contents):
 
 def extract_event_name(event_string):
     parts = event_string.split('/')
-    event_name = parts[2].lower()
+    event_name = parts[1].lower()
     return event_name
 
 
@@ -97,7 +102,7 @@ def parse_date(date_string):
 def get_key(search_string, models):
     return models.index(search_string.upper()) if search_string.upper() in models else False
 
- 
+
 def custom_sort(item):
     return item['words']
 
