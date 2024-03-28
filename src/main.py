@@ -43,8 +43,8 @@ SECRET_KEY = os.environ['aws_secret_key']
 
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
+logging.basicConfig(format='%(levelname)s %(asctime)s - %(message)s', level=logging.INFO, force=True)
 logger = logging.getLogger()
-logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):

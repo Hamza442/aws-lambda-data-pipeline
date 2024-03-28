@@ -51,7 +51,7 @@ class EventProcessor(ABC):
             cols_renamed = rename_columns(contents)
             mapping_tables = get_mapping_tables(
                 self.secret_name, self.region, self.aws_access_key, self.aws_secret_key, self.host, self.rds_pem_key)
-            cleaned_data = clean_data(cols_renamed, self.cleaning_functions, mapping_tables)
+            cleaned_data = clean_data(cols_renamed, self.cleaning_functions, mapping_tables, self.logger)
             event_name = extract_event_name(key)
             response = self.write_to_s3(
                 self.s3_client, cleaned_data, self.destination_bucket, self.destination_prefix, event_name)
@@ -64,7 +64,7 @@ class EventProcessor(ABC):
                 end_time, elapsed_seconds, response['status_code'], self.dynamodb_client,  self.dynamodb_table)
             self.logger.info(f"Processing completed for file:e s3://{bucket}/{key}")
         except Exception:
-            self.logger.error(f"Error while processing the file s3://{bucket}/{key}")
+            self.logger.exception(f"Error while processing the file s3://{bucket}/{key}")
 
     def read_file_contents_from_s3(self, bucket_name: str, s3_key: str, s3_client):
         self.logger.info(f"Reading file started from = s3://{bucket_name}/{s3_key}")

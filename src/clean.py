@@ -1,12 +1,11 @@
 import re
-import logging
 from datetime import datetime
 from conf import seller_type_config, excluded_words
 from helpers import count_months, extract_numbers, parse_date, is_float, get_key, get_new_descriptions,\
     find_key_by_value, remove_makes, remove_descriptions, custom_sort
 
 
-def clean_data(data, cleaning_functions, mapping_tables):
+def clean_data(data, cleaning_functions, mapping_tables, logger):
     """
     Apply cleaning functions depending upon attribute name
 
@@ -14,33 +13,35 @@ def clean_data(data, cleaning_functions, mapping_tables):
         data: list of dictionaries car data
         cleaning_functions : dictionary of column name as key and function name as value
         mapping_tables : list of dictionaries of backbone mapping tables
+        logger: logger
     """
-    logging.info("======== Starting the data cleaning process ========")
+    logger.info("======== Starting the data cleaning process ========")
     for car in data:
         try:
             for key, value in car.items():
                 if key in cleaning_functions:
                     if key in ('doors', 'seats', 'gears'):
-                        car[key] = cleaning_functions[key.lower()](value, key[:-1].upper())
+                        car[key] = cleaning_functions[key.lower()](value, key[:-1].upper(), logger)
                     elif key == 'model':
-                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables)
+                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables, logger)
                     elif key == 'spec':
-                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables)
+                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables, logger)
                     else:
-                        car[key] = cleaning_functions[key.lower()](value)
+                        car[key] = cleaning_functions[key.lower()](value, logger)
         except Exception as e:
-            logging.exception(e)
+            logger.exception(e)
             continue
-    logging.info("======== Data cleaning completed ========")
+    logger.info("======== Data cleaning completed ========")
     return data
 
 
-def trim_and_upper(input_string):
+def trim_and_upper(input_string, logger):
     """
     Trim and convert to upper case
 
     Args:
         input_string : column  value from car data
+        logger: logger
     """
     try:
         # Check if input is string and not empty
@@ -54,17 +55,18 @@ def trim_and_upper(input_string):
         # Return trimmed and upper case string
         return trimmed_and_upper
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {input_string}")
+        logger.exception(f"Error: {e} === Value: {input_string}")
         return input_string
 
 
-def cleaning_fuel_type(fuel_type):
+def cleaning_fuel_type(fuel_type, logger):
     """
     Clean  Fuel Type field by replacing 
     values with correct form of the fuel type
 
     Args:
         fuel_type : fuel type from car data
+        logger: logger
     """
     try:
         if fuel_type and isinstance(fuel_type, str):
@@ -74,17 +76,18 @@ def cleaning_fuel_type(fuel_type):
             return fuel_type.strip().upper()
         return fuel_type
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {fuel_type}")
+        logger.exception(f"Error: {e} === Value: {fuel_type}")
         return fuel_type
 
 
-def clean_transmission(transmission):
+def clean_transmission(transmission, logger):
     """
     Clean  Transmission Field by replacing  
     values with correct form of the transmission
     
     Args:
         transmission : transmission type from car data
+        logger: logger
     """
     try:
         if transmission and isinstance(transmission, str):
@@ -95,17 +98,18 @@ def clean_transmission(transmission):
             return transmission.strip().upper()
         return transmission
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {transmission}")
+        logger.exception(f"Error: {e} === Value: {transmission}")
         return transmission
 
 
-def clean_engine_size(engine_size):
+def clean_engine_size(engine_size, logger):
     """
     Clean Engine Size filed by adding 
     liters to end of  numeric value
 
     Args:
         engine_size : engine size of the car in liters
+        logger: logger
     """
     try:
         if engine_size and isinstance(engine_size, str):
@@ -127,18 +131,19 @@ def clean_engine_size(engine_size):
             if isinstance(engine_size, int) and float(engine_size) > 0.0:
                 engine_size = str(float(engine_size))+" L"
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {engine_size}")
+        logger.exception(f"Error: {e} === Value: {engine_size}")
 
     return engine_size
 
 
-def clean_cylinders(cylinders):
+def clean_cylinders(cylinders, logger):
     """
        Clean cylinders column value by
        replace string  with empty string
 
     Args:
-        cylinders : numbre of cylinders car engine have
+        cylinders : number of cylinders car engine have
+        logger: logger
     """
     try:
         if cylinders and isinstance(cylinders, str):
@@ -146,11 +151,11 @@ def clean_cylinders(cylinders):
             return cylinders  # Return cleaned input
         return cylinders
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {cylinders}")
+        logger.exception(f"Error: {e} === Value: {cylinders}")
         return cylinders
 
 
-def cleaning_hp(hp):
+def cleaning_hp(hp, logger):
     """
     Clean horse power column of car data
     by removing unnecessary characters and
@@ -158,6 +163,7 @@ def cleaning_hp(hp):
 
     Args:
         hp : horse power of the car
+        logger: logger
     """
     try:
         if hp:
@@ -183,11 +189,11 @@ def cleaning_hp(hp):
                 return str(hp).strip().upper()
         return hp
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {hp}")
+        logger.exception(f"Error: {e} === Value: {hp}")
         return hp
 
 
-def clean_by_type(value, type_str):
+def clean_by_type(value, type_str, logger):
     """
     Clean  a specific field based on its type
     type can be doors,seats,gears
@@ -195,6 +201,7 @@ def clean_by_type(value, type_str):
     Args:
         value : different type of car parts
         type_str : car parts such as door,seat,gear
+        logger: logger
     """
     try:
         # Check if value exists
@@ -215,7 +222,7 @@ def clean_by_type(value, type_str):
                 # If value is not empty
                 if value:
                     # Recursively call function
-                    return clean_by_type(value, type_str)
+                    return clean_by_type(value, type_str, logger)
                 # Return cleaned value in uppercase
                 return value.strip().upper()
         else:
@@ -224,16 +231,17 @@ def clean_by_type(value, type_str):
             else:
                 return (str(value) + ' ' + type_str + 'S').strip()
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {value}")
+        logger.exception(f"Error: {e} === Value: {value}")
         return value
 
 
-def clean_seller_type(seller_type):
+def clean_seller_type(seller_type, logger):
     """
     Clean  seller type by replace values
     from a seller type dict in config
     Args:
         seller_type : car seller type
+        logger: logger
     """
     try:
         if seller_type:
@@ -250,15 +258,16 @@ def clean_seller_type(seller_type):
             return value.strip()
         return seller_type
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {seller_type}")
+        logger.exception(f"Error: {e} === Value: {seller_type}")
         return seller_type
 
 
-def clean_for_duration(line):
+def clean_for_duration(line, logger):
     """Find out car warranty duration in months
 
     Args:
         line : dates of car warranty
+        logger: logger
     """
     try:
         if line and isinstance(line, str):
@@ -302,11 +311,11 @@ def clean_for_duration(line):
             return line
         return line
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {line}")
+        logger.exception(f"Error: {e} === Value: {line}")
         return line
 
 
-def clean_body_type(body_type):
+def clean_body_type(body_type, logger):
     try:
         if body_type:
             misc = 'SALOON'
@@ -322,11 +331,11 @@ def clean_body_type(body_type):
             return string
         return body_type
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {body_type}")
+        logger.exception(f"Error: {e} === Value: {body_type}")
         return body_type
 
 
-def cleaning_model(model, make, data_to_map):
+def cleaning_model(model, make, data_to_map, logger):
     """
     Clean the model of the car by matching
     value in the backbone tables for mapping
@@ -335,6 +344,7 @@ def cleaning_model(model, make, data_to_map):
         model : model of the car
         make : make of the car
         data_to_map : mapping tables in backbone db
+        logger: logger
     """
     try:
         if model and make:
@@ -451,13 +461,13 @@ def cleaning_model(model, make, data_to_map):
             
             return model
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {model}")
+        logger.exception(f"Error: {e} === Value: {model}")
         return model
     
     return model
 
 
-def cleaning_spec(spec, make, data_to_map):
+def cleaning_spec(spec, make, data_to_map, logger):
     """
     Clean specification of car by matching
     it with different mapping tables in the
@@ -467,6 +477,7 @@ def cleaning_spec(spec, make, data_to_map):
         spec : specification of the car
         make : make of the car
         data_to_map : mapping tables in backbone db
+        logger: logger
     """
     try:
         if spec and make:
@@ -566,7 +577,7 @@ def cleaning_spec(spec, make, data_to_map):
             
             return spec
     except Exception as e:
-        logging.exception(f"Error: {e} === Value: {spec}")
+        logger.exception(f"Error: {e} === Value: {spec}")
         return spec
     
     return spec
