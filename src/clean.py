@@ -31,10 +31,16 @@ def rename_columns_and_clean_data(contents, cleaning_functions, mapping_tables, 
                         car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
                     elif key == 'spec':
                         car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
+                    elif key == 'body_type':
+                        car[key] = cleaning_functions[key](value, car['spec'], car['model'], mapping_tables , excluded_words)
                     else:
                         car[key] = cleaning_functions[key](value, logger)
                 else:
                     car[key] = value
+
+            seller_name, url, vin = car.get('seller_name', ''), car['meta'].get('url', ''), car.get('vin', '')
+            car['tracking_id'] = re.sub(r'[^A-Za-z0-9]', '', seller_name + url if not vin else seller_name + vin)    
+                
             data.append(car)
         except Exception as e:
             logger.exception(e)
@@ -323,24 +329,94 @@ def clean_for_duration(line, logger):
         return line
 
 
-def clean_body_type(body_type, logger):
-    try:
-        if body_type:
-            misc = 'SALOON'
-            string = body_type.strip().upper()
-            pattern = r'\b(?:' + '|'.join(re.escape(word) for word in excluded_words) + r')\b'
-            string = re.sub(pattern, '', string, flags=re.IGNORECASE).strip().upper()
-            if string == misc:
-                return 'SEDAN'
+def clean_body_type(body_type, spec, model, dataToMap , excluded_words):
 
-            matches = re.findall(r'\b(' + re.escape(misc) + r')\b', string, re.IGNORECASE)
-            if matches:
-                return 'SEDAN'
-            return string
-        return body_type
-    except Exception as e:
-        logger.exception(f"Error: {e} === Value: {body_type}")
-        return body_type
+    misc = 'SALOON'
+    bodystyle = body_type
+    bodyTypes = dataToMap['bb_body']
+    excludedWords = excluded_words
+    flag = True if body_type else False
+
+    output = []
+
+    if flag:
+        # Find the index of the string in the uppercase body types list
+        key = next((i for i, item in enumerate(bodyTypes) if item.upper() == bodystyle), None)
+
+        if key is not None:
+            output.append(bodyTypes[key])
+        else:
+            # Remove excluded words and trim
+            for excluded_word in excludedWords:
+                bodystyle = bodystyle.replace(excluded_word.upper(), "")
+            bodystyle = bodystyle.strip()
+
+            # Check again for the cleaned string
+            key = next((i for i, item in enumerate(bodyTypes) if item.upper() == bodystyle), None)
+
+            if key is not None:
+                output.append(bodyTypes[key])
+            elif bodystyle == misc:
+                output.append('SEDAN')
+            else:
+                for value in bodyTypes:
+                    matches = re.findall(r'\b(' + re.escape(value) + r')\b', bodystyle, re.IGNORECASE)
+                    if matches:
+                        output.append(matches[0].strip().upper())
+                        break
+                else:
+                    matches = re.findall(r'\b(' + re.escape(misc) + r')\b', bodystyle, re.IGNORECASE)
+                    if matches:
+                        output.append(matches[0].strip().upper())
+                    else:
+                        output.append(None)
+    else:
+        if spec is not None:
+            # Remove excluded words and trim for spec
+            for excluded_word in excludedWords:
+                spec = spec.replace(excluded_word.upper(), "")
+            spec = spec.strip()
+
+            # Search for matches in spec
+            spec_match = False
+            for value in bodyTypes:
+                matches = re.findall(r'\b(' + re.escape(value) + r')\b', spec, re.IGNORECASE)
+                if matches:
+                    output.append(matches[0].strip().upper())
+                    spec_match = True
+                    break
+
+            if not spec_match:
+                matches = re.findall(r'\b(' + re.escape(misc) + r')\b', spec, re.IGNORECASE)
+                if matches:
+                    output.append(matches[0].strip().upper())
+                else:
+                    output.append(None)
+        else:
+            if model is not None:
+                # Remove excluded words and trim for model
+                for excluded_word in excludedWords:
+                    model = model.replace(excluded_word.upper(), "")
+                model = model.strip()
+
+                # Search for matches in model
+                model_match = False
+                for value in bodyTypes:
+                    matches = re.findall(r'\b(' + re.escape(value) + r')\b', model, re.IGNORECASE)
+                    if matches:
+                        output.append(matches[0].strip().upper())
+                        model_match = True
+                        break
+
+                if not model_match:
+                    matches = re.findall(r'\b(' + re.escape(misc) + r')\b', model, re.IGNORECASE)
+                    if matches:
+                        output.append(matches[0].strip().upper())
+                    else:
+                        output.append(None)
+            else:
+                output.append(None)
+    return output[0]
 
 
 def cleaning_model(model, make, data_to_map, logger):
