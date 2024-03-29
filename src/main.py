@@ -37,6 +37,7 @@ secret = "prod/auto-data/vd-readonly"
 region = "ap-south-1"  # pem key region and this region should be same
 rds_pem_key = "prod/rds-pem"
 HOST = "127.0.0.1"
+mapping_tables_names = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
 
 ACCESS_KEY = os.environ['aws_access_key']
 SECRET_KEY = os.environ['aws_secret_key']
@@ -50,6 +51,6 @@ logger = logging.getLogger()
 def lambda_handler(event, context):
     processor: EventProcessor = EventProcessor(
         s3, ACCESS_KEY, SECRET_KEY, destination_prefix, destination_bucket, secret, region, rds_pem_key, lambda_job_id,
-        dynamodb_table, HOST, cleaning_functions, dynamodb, logger)
+        dynamodb_table, HOST, cleaning_functions, dynamodb, mapping_tables_names, logger)
     processor.process_event(event)
 

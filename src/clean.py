@@ -1,33 +1,41 @@
+import json
 import re
 from datetime import datetime
-from conf import seller_type_config, excluded_words
+from conf import seller_type_config, excluded_words, fields_data
 from helpers import count_months, extract_numbers, parse_date, is_float, get_key, get_new_descriptions,\
     find_key_by_value, remove_makes, remove_descriptions, custom_sort
 
 
-def clean_data(data, cleaning_functions, mapping_tables, logger):
+def rename_columns_and_clean_data(contents, cleaning_functions, mapping_tables, logger) -> list[dict[str, str]]:
     """
     Apply cleaning functions depending upon attribute name
 
     Args:
-        data: list of dictionaries car data
+        contents: files contents read from s3
         cleaning_functions : dictionary of column name as key and function name as value
         mapping_tables : list of dictionaries of backbone mapping tables
         logger: logger
     """
     logger.info("======== Starting the data cleaning process ========")
-    for car in data:
+    data = []
+    for item in contents:
         try:
-            for key, value in car.items():
+            raw_car = json.loads(item.decode('utf-8'))
+            car = {}
+            for raw_key, value in raw_car.items():
+                key = fields_data.get(raw_key, raw_key)
                 if key in cleaning_functions:
                     if key in ('doors', 'seats', 'gears'):
-                        car[key] = cleaning_functions[key.lower()](value, key[:-1].upper(), logger)
+                        car[key] = cleaning_functions[key](value, key[:-1].upper(), logger)
                     elif key == 'model':
-                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables, logger)
+                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
                     elif key == 'spec':
-                        car[key] = cleaning_functions[key](value, car['make'], mapping_tables, logger)
+                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
                     else:
-                        car[key] = cleaning_functions[key.lower()](value, logger)
+                        car[key] = cleaning_functions[key](value, logger)
+                else:
+                    car[key] = value
+            data.append(car)
         except Exception as e:
             logger.exception(e)
             continue

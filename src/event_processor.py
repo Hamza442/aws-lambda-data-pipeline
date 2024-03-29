@@ -7,13 +7,13 @@ from datetime import datetime
 import pytz
 
 from helpers import extract_event_name, rename_columns, get_mapping_tables
-from clean import clean_data
+from clean import rename_columns_and_clean_data
 
 
 class EventProcessor(ABC):
     def __init__(self, s3_client, aws_access_key: str, aws_secret_key: str, destination_prefix: str,
                  destination_bucket: str, secret_name: str, region: str, rds_pem_key: str, job_id: str,
-                 dynamodb_table: str, host: str, cleaning_functions, dynamodb_client,  logger):
+                 dynamodb_table: str, host: str, cleaning_functions, dynamodb_client, mapping_table_names, logger):
         self.destination_bucket = destination_bucket
         self.destination_prefix = destination_prefix
         self.job_id = job_id
@@ -27,6 +27,7 @@ class EventProcessor(ABC):
         self.s3_client = s3_client
         self.cleaning_functions = cleaning_functions
         self.dynamodb_client = dynamodb_client
+        self.mapping_table_names = mapping_table_names
         self.logger = logger
 
     def process_event(self, event):
@@ -46,12 +47,13 @@ class EventProcessor(ABC):
             # time for dynamodb logging
             job_start_time = int(time.mktime(datetime.now().timetuple()))
             start_time = datetime.now()
+            mapping_tables: dict[str, list[str]] = get_mapping_tables(
+                self.mapping_table_names, self.secret_name, self.region, self.aws_access_key, self.aws_secret_key,
+                self.host, self.rds_pem_key)
             # Reading file
             contents = self.read_file_contents_from_s3(bucket, key, self.s3_client)
-            cols_renamed = rename_columns(contents)
-            mapping_tables = get_mapping_tables(
-                self.secret_name, self.region, self.aws_access_key, self.aws_secret_key, self.host, self.rds_pem_key)
-            cleaned_data = clean_data(cols_renamed, self.cleaning_functions, mapping_tables, self.logger)
+            cleaned_data = rename_columns_and_clean_data(
+                contents, self.cleaning_functions, mapping_tables, self.logger)
             event_name = extract_event_name(key)
             response = self.write_to_s3(
                 self.s3_client, cleaned_data, self.destination_bucket, self.destination_prefix, event_name)
@@ -75,7 +77,7 @@ class EventProcessor(ABC):
 
     def write_to_s3(self, s3_client, data, bucket_name, key_prefix, event_name):
         self.logger.info("======== Writing data to s3 ========")
-        json_data = json.dumps(data)
+        json_data = '\n'.join(json.dumps(entry) for entry in data)
         compressed_data = gzip.compress(json_data.encode('utf-8'))
         current_date = datetime.now(pytz.utc)
         date = current_date.strftime("%Y-%m-%d")

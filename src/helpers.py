@@ -1,11 +1,6 @@
 import re
-import os
 import json
 import boto3
-import pytz
-import gzip
-import uuid
-import logging
 import pymysql
 import paramiko
 from io import StringIO
@@ -15,39 +10,40 @@ from conf import fields_data
 from sshtunnel import SSHTunnelForwarder
 
 
-def get_secret(secret, region, aws_access_key, aws_secret_key):
+def get_secret(secret, region, aws_access_key: str, aws_secret_key: str) -> str:
     session = boto3.session.Session(aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
     client = session.client(service_name='secretsmanager', region_name=region)
     response = client.get_secret_value(SecretId=secret)
     return response['SecretString']
 
 
-def get_mapping_tables(secret, region, aws_access_key, aws_secret_key, host, rds_pem_key):
-    tables = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
-    secrets = json.loads(get_secret(secret, region, aws_access_key, aws_secret_key))
-    mapping_dict = {}
-    for table_name in tables:
-        mapping_dict[table_name] = get_mapping_table_desc(
-            secrets['host'], secrets['username'], secrets['password'], secrets['database'], int(secrets['port']),
-            secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), table_name, host,
-            aws_access_key, aws_secret_key, rds_pem_key, region)
-    return mapping_dict
+def get_mapping_tables(tables: list[str], secret, region, aws_access_key, aws_secret_key, host, rds_pem_key) \
+        -> dict[str, list[str]]:
+    secrets: dict[str, str] = json.loads(get_secret(secret, region, aws_access_key, aws_secret_key))
+    return get_mapping_table_desc(
+        secrets['host'], secrets['username'], secrets['password'], secrets['database'], int(secrets['port']),
+        secrets['ssh_hostname'], secrets['ssh_username'], int(secrets['ssh_port']), tables, host, aws_access_key,
+        aws_secret_key, rds_pem_key, region)
 
 
 def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: str, sql_main_database: str,
-                           sql_port: str, ssh_host: str, ssh_user: str, ssh_port: str, table: str, host: str,
-                           aws_access_key: str, aws_secret_key: str, rds_pem_key: str, region: str):
+                           sql_port: str, ssh_host: str, ssh_user: str, ssh_port: str, tables: list[str], host: str,
+                           aws_access_key: str, aws_secret_key: str, rds_pem_key: str, region: str) \
+        -> dict[str, list[str]]:
 
     rds_key = get_secret(rds_pem_key, region, aws_access_key, aws_secret_key)
     myp_key = paramiko.RSAKey.from_private_key(StringIO(rds_key))
+    mapping = {}
     with SSHTunnelForwarder((ssh_host, ssh_port), ssh_username=ssh_user, ssh_pkey=myp_key,
                             remote_bind_address=(sql_hostname, sql_port)) as tunnel:
         conn = pymysql.connect(
             host=host, user=sql_username, passwd=sql_password, db=sql_main_database, port=tunnel.local_bind_port)
-        query = "SELECT DISTINCT description FROM {};".format(table)
-        data = pd.read_sql_query(query, conn)
+        for table in tables:
+            query = "SELECT DISTINCT description FROM {};".format(table)
+            data = pd.read_sql_query(query, conn)
+            mapping[table] = data['description'].tolist()
         conn.close()
-    return data['description'].tolist()
+    return mapping
 
 
 def rename_columns(contents):
