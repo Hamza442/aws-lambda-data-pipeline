@@ -11,11 +11,11 @@ from clean import rename_columns_and_clean_data
 
 
 class EventProcessor(ABC):
-    def __init__(self, s3_client, aws_access_key: str, aws_secret_key: str, destination_prefix: str,
-                 destination_bucket: str, secret_name: str, region: str, rds_pem_key: str, job_id: str,
+    def __init__(self, s3_client, aws_access_key: str, aws_secret_key: str,
+                 destination_raw_bucket: str,destination_stg_bucket: str, secret_name: str, region: str, rds_pem_key: str, job_id: str,
                  dynamodb_table: str, host: str, cleaning_functions, dynamodb_client, mapping_table_names, logger):
-        self.destination_bucket = destination_bucket
-        self.destination_prefix = destination_prefix
+        self.destination_raw_bucket = destination_raw_bucket
+        self.destination_stg_bucket = destination_stg_bucket
         self.job_id = job_id
         self.dynamodb_table = dynamodb_table
         self.secret_name = secret_name
@@ -47,16 +47,16 @@ class EventProcessor(ABC):
             # time for dynamodb logging
             job_start_time = int(time.mktime(datetime.now().timetuple()))
             start_time = datetime.now()
-            mapping_tables: dict[str, list[str]] = get_mapping_tables(
+            mapping_tables_desc,mapping_tables = get_mapping_tables(
                 self.mapping_table_names, self.secret_name, self.region, self.aws_access_key, self.aws_secret_key,
                 self.host, self.rds_pem_key)
             # Reading file
             contents = self.read_file_contents_from_s3(bucket, key, self.s3_client)
-            cleaned_data = rename_columns_and_clean_data(
-                contents, self.cleaning_functions, mapping_tables, self.logger)
+            cleaned_data,raw_data = rename_columns_and_clean_data(
+                contents, self.cleaning_functions, mapping_tables_desc,mapping_tables, self.logger)
             event_name = extract_event_name(key)
             response = self.write_to_s3(
-                self.s3_client, cleaned_data, self.destination_bucket, self.destination_prefix, event_name)
+                self.s3_client, cleaned_data,raw_data, self.destination_raw_bucket, self.destination_stg_bucket, event_name)
             # time for dynamodb logging
             end_time = datetime.now()
             elapsed_time = end_time - start_time
@@ -75,19 +75,24 @@ class EventProcessor(ABC):
         self.logger.info(f"Reading file completed from = s3://{bucket_name}/{s3_key}")
         return iterator
 
-    def write_to_s3(self, s3_client, data, bucket_name, key_prefix, event_name):
+    def write_to_s3(self, s3_client, clean_data,raw_data, raw_bucket, stg_bucket, event_name):
         self.logger.info("======== Writing data to s3 ========")
-        json_data = '\n'.join(json.dumps(entry) for entry in data)
-        compressed_data = gzip.compress(json_data.encode('utf-8'))
+        clean_json_data = '\n'.join(json.dumps(entry) for entry in clean_data)
+        raw_json_data = '\n'.join(json.dumps(entry) for entry in raw_data)
+        clean_compressed_data = gzip.compress(clean_json_data.encode('utf-8'))
+        raw_compressed_data = gzip.compress(raw_json_data.encode('utf-8'))
         current_date = datetime.now(pytz.utc)
         date = current_date.strftime("%Y-%m-%d")
         hour = current_date.strftime('%H')
         file_name = f"{event_name}_{current_date.strftime('%Y-%m-%dT%H-%M-%S')}"
-        s3_key = f"{key_prefix}/{event_name}/date={date}/hour={hour}/{file_name}.json.gz"
-        upload_res = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=compressed_data)
-        self.logger.info(f"Data uploaded to S3: s3://{bucket_name}/{s3_key}")
+        clean_data_s3_key = f"{event_name}/date={date}/hour={hour}/{file_name}.json.gz"
+        raw_data_s3_key = f"{event_name}/date={date}/hour={hour}/{file_name}.json.gz"
+        upload_res = s3_client.put_object(Bucket=stg_bucket, Key=clean_data_s3_key, Body=clean_compressed_data)
+        upload_res = s3_client.put_object(Bucket=raw_bucket, Key=raw_data_s3_key, Body=raw_compressed_data)
+        self.logger.info(f"Data uploaded to S3: s3://{stg_bucket}/{clean_data_s3_key}")
+        self.logger.info(f"Data uploaded to S3: s3://{raw_bucket}/{raw_data_s3_key}")
         return {
-            'destination_file_name': f"s3://{s3_key}",
+            'destination_file_name': f"s3://{clean_data_s3_key}",
             'status_code': upload_res['ResponseMetadata']['HTTPStatusCode']
         }
 

@@ -3,11 +3,11 @@ import json
 import boto3
 import pymysql
 import paramiko
-from io import StringIO
 import pandas as pd
+from io import StringIO
 from datetime import datetime
-from conf import fields_data
 from sshtunnel import SSHTunnelForwarder
+from conf import fields_data,rename_mastercode_cache,COMPOSITE_KEY,cols_to_map,cols_to_mapping_tbl
 
 
 def get_secret(secret, region, aws_access_key: str, aws_secret_key: str) -> str:
@@ -34,16 +34,37 @@ def get_mapping_table_desc(sql_hostname: str, sql_username: str, sql_password: s
     rds_key = get_secret(rds_pem_key, region, aws_access_key, aws_secret_key)
     myp_key = paramiko.RSAKey.from_private_key(StringIO(rds_key))
     mapping = {}
+    mapping_tables_dict = {}
     with SSHTunnelForwarder((ssh_host, ssh_port), ssh_username=ssh_user, ssh_pkey=myp_key,
                             remote_bind_address=(sql_hostname, sql_port)) as tunnel:
         conn = pymysql.connect(
             host=host, user=sql_username, passwd=sql_password, db=sql_main_database, port=tunnel.local_bind_port)
         for table in tables:
-            query = "SELECT DISTINCT description FROM {};".format(table)
-            data = pd.read_sql_query(query, conn)
-            mapping[table] = data['description'].tolist()
+            
+            if table == 'bb_model':
+                query = "SELECT id, upper(description) as description, make_id FROM {};".format(table)
+                data = pd.read_sql_query(query, conn)
+                mapping_tables_dict[table] = {str(makecode) + description: id for id, description, makecode in data.values}
+            elif table == 'bb_specifications':
+                query = "SELECT id, upper(description) as description, model_id FROM {};".format(table)
+                data = pd.read_sql_query(query, conn)
+                mapping_tables_dict[table] = {str(modelid) + description: id for id, description, modelid in data.values}
+            elif table == 'mastercodes_cache':
+                query = "SELECT admeid, model_year, make, model, doors, body_type, transmission, no_of_cyls, fuel, gears, seats, spec FROM {};".format(table)
+                data = pd.read_sql_query(query, conn)
+                data  = data.rename(columns=rename_mastercode_cache)
+                mapping_tables_dict[table] = data.to_dict(orient='records')
+            else:
+                query = "SELECT id, upper(description) as description FROM {};".format(table)
+                data = pd.read_sql_query(query, conn)
+                mapping_tables_dict[table] = data.set_index('description')['id'].to_dict()
+
+            if table != 'mastercodes_cache':
+                query = "SELECT DISTINCT description FROM {};".format(table)
+                data = pd.read_sql_query(query, conn)
+                mapping[table] = data['description'].tolist()
         conn.close()
-    return mapping
+    return mapping, mapping_tables_dict
 
 
 def rename_columns(contents):
@@ -126,3 +147,60 @@ def get_new_descriptions(data):
     new_descriptions = [desc.replace(' ', '').replace('-', '') for desc in data]
     result = [{desc: new_desc} for desc, new_desc in zip(data, new_descriptions)]
     return result
+
+
+def add_admeid(car_data, mapping_tables):
+    mastercode_cache = mapping_tables['mastercodes_cache']
+    if not car_data['year_id'] or not car_data['make_id'] or not car_data['model_id']:
+        car_data['admeid'] = ''
+    else:
+        # Rename keys for master code cache
+        # - do renaming in mastercode_cache df and then convert to list of dicts
+        # Create a new dictionary containing only non-empty values for keys present in COMPOSITE_KEY
+        filtered_car_data = {key: car_data[key] for key in COMPOSITE_KEY if car_data.get(key)}
+        updated_composite_key = list(filtered_car_data.keys())
+        # Filter mastercode_cache except admeid
+        filtered_mastercode_cache = [{key: dictionary[key] for key in dictionary if key in updated_composite_key or key == 'admeid'} for dictionary in mastercode_cache]
+        match_found = False
+        for mastercode_cache_dict in filtered_mastercode_cache:
+            # Check if all values in original_dict match the values in additional_dict
+            if all(filtered_car_data[key] == mastercode_cache_dict[key] for key in filtered_car_data):
+                # Add the 'admeid' value to the original dictionary
+                car_data['admeid'] = mastercode_cache_dict['admeid']
+                match_found = True
+                break  # Stop iterating if a match is found
+        if not match_found:
+            # Handle the case when a match is not found
+            car_data['admeid'] = ''
+
+            
+    return car_data
+
+def map_data(car_data,mapping_tables):
+    
+    for col_name in cols_to_map[:-2]:
+        if col_name in car_data.keys(): # check column to map is in car_data
+            mapping_table_to_process = mapping_tables.get(cols_to_mapping_tbl[col_name])
+            if str(car_data[col_name]) in mapping_table_to_process:
+                car_data[col_name + '_id'] = str(mapping_table_to_process[str(car_data[col_name])])
+            else:
+                car_data[col_name + '_id'] = ''
+    return car_data
+
+def map_data_model_spec(car_data,mapping_tables,col_name, fk):
+    if col_name in car_data.keys(): # check column to map is in car_data
+        mapping_table_to_process = mapping_tables.get(cols_to_mapping_tbl[col_name])
+        key_to_check = ''.join([str(car_data[fk]),car_data[col_name]])
+        if key_to_check in mapping_table_to_process:
+            car_data[col_name + '_id'] = mapping_table_to_process[key_to_check]
+        else:
+            car_data[col_name + '_id'] = ''
+    return car_data
+
+
+def add_id_keys(raw_car, clean_car):
+    id_keys = {key: value for key, value in clean_car.items() if key.endswith("_id")}
+    raw_car.update(id_keys)
+    return raw_car
+    
+        

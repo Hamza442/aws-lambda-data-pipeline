@@ -29,15 +29,15 @@ cleaning_functions = {
 }
 
 # Replace with environment variable or configs
-destination_bucket = "raw-autodata-vd-ml-data"
-destination_prefix = "zyte_feed"
+destination_raw_bucket = "raw-dl-autodata"
+destination_stg_bucket = "stage-dl-autodata"
 lambda_job_id = "lambda-cleaning-job"
 dynamodb_table = "lambda_run_details"
 secret = "prod/auto-data/vd-readonly"
 region = "ap-south-1"  # pem key region and this region should be same
 rds_pem_key = "prod/rds-pem"
 HOST = "127.0.0.1"
-mapping_tables_names = ['bb_fuel', 'bb_enginesize', 'bb_body', 'bb_hp', 'bb_specifications', 'bb_model', 'bb_make']
+mapping_tables_names = ['bb_modelyear', 'bb_doors', 'bb_seats', 'bb_gears', 'bb_noofcyls', 'bb_hp', 'bb_fuel', 'bb_body', 'bb_enginesize', 'bb_transmissions','bb_make','bb_model','bb_specifications']
 
 ACCESS_KEY = os.environ['aws_access_key']
 SECRET_KEY = os.environ['aws_secret_key']
@@ -50,7 +50,7 @@ logger = logging.getLogger()
 
 def lambda_handler(event, context):
     processor: EventProcessor = EventProcessor(
-        s3, ACCESS_KEY, SECRET_KEY, destination_prefix, destination_bucket, secret, region, rds_pem_key, lambda_job_id,
+        s3, ACCESS_KEY, SECRET_KEY, destination_raw_bucket, destination_stg_bucket, secret, region, rds_pem_key, lambda_job_id,
         dynamodb_table, HOST, cleaning_functions, dynamodb, mapping_tables_names, logger)
     processor.process_event(event)
 

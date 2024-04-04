@@ -3,21 +3,22 @@ import re
 from datetime import datetime
 from conf import seller_type_config, excluded_words, fields_data
 from helpers import count_months, extract_numbers, parse_date, is_float, get_key, get_new_descriptions,\
-    find_key_by_value, remove_makes, remove_descriptions, custom_sort
+    find_key_by_value, remove_makes, remove_descriptions, custom_sort,map_data,map_data,map_data_model_spec,add_admeid,add_id_keys
 
 
-def rename_columns_and_clean_data(contents, cleaning_functions, mapping_tables, logger) -> list[dict[str, str]]:
+def rename_columns_and_clean_data(contents, cleaning_functions, mapping_tables_desc,mapping_tables, logger) -> list[dict[str, str]]:
     """
     Apply cleaning functions depending upon attribute name
 
     Args:
         contents: files contents read from s3
         cleaning_functions : dictionary of column name as key and function name as value
-        mapping_tables : list of dictionaries of backbone mapping tables
+        mapping_tables_desc : list of dictionaries of backbone mapping tables
         logger: logger
     """
     logger.info("======== Starting the data cleaning process ========")
-    data = []
+    clean_data = []
+    raw_data = []
     for item in contents:
         try:
             raw_car = json.loads(item.decode('utf-8'))
@@ -28,25 +29,36 @@ def rename_columns_and_clean_data(contents, cleaning_functions, mapping_tables, 
                     if key in ('doors', 'seats', 'gears'):
                         car[key] = cleaning_functions[key](value, key[:-1].upper(), logger)
                     elif key == 'model':
-                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
+                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables_desc, logger)
                     elif key == 'spec':
-                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables, logger)
+                        car[key] = cleaning_functions[key](value, raw_car['Make'], mapping_tables_desc, logger)
                     elif key == 'body_type':
-                        car[key] = cleaning_functions[key](value, car['spec'], car['model'], mapping_tables , excluded_words)
+                        car[key] = cleaning_functions[key](value, car['spec'], car['model'], mapping_tables_desc , excluded_words)
                     else:
                         car[key] = cleaning_functions[key](value, logger)
                 else:
                     car[key] = value
 
             seller_name, url, vin = car.get('seller_name', ''), car['meta'].get('url', ''), car.get('vin', '')
-            car['tracking_id'] = re.sub(r'[^A-Za-z0-9]', '', seller_name + url if not vin else seller_name + vin)    
+            car['tracking_id'] = re.sub(r'[^A-Za-z0-9]', '', seller_name + url if not vin else seller_name + vin)
+            raw_car['tracking_id'] = re.sub(r'[^A-Za-z0-9]', '', seller_name + url if not vin else seller_name + vin)
+            
+            # Car data mapping with backbone tables
+            car = map_data(car,mapping_tables)
+            car = map_data_model_spec(car,mapping_tables,'model','make_id')
+            car = map_data_model_spec(car,mapping_tables,'spec','model_id')
+            car = add_admeid(car,mapping_tables)
+            
+            # add ids to raw car data
+            raw_car = add_id_keys(raw_car,car)
                 
-            data.append(car)
+            clean_data.append(car)
+            raw_data.append(raw_car)
         except Exception as e:
             logger.exception(e)
             continue
     logger.info("======== Data cleaning completed ========")
-    return data
+    return clean_data,raw_data
 
 
 def trim_and_upper(input_string, logger):
@@ -105,10 +117,10 @@ def clean_transmission(transmission, logger):
     """
     try:
         if transmission and isinstance(transmission, str):
-            transmission = transmission.strip()    
-            if transmission.upper() == 'A/T':   
-                transmission = "AUTOMATIC"    
-                return transmission
+            transmission = transmission.upper()
+            transmission = transmission.strip().replace("TRANSMISSION", "", 1)  # Remove "transmission"
+            if transmission == 'A/T':
+                transmission = "AUTOMATIC"
             return transmission.strip().upper()
         return transmission
     except Exception as e:
@@ -239,6 +251,8 @@ def clean_by_type(value, type_str, logger):
                     return clean_by_type(value, type_str, logger)
                 # Return cleaned value in uppercase
                 return value.strip().upper()
+        elif value and isinstance(value, str) and '+' in value:
+            return value.upper()
         else:
             if value == 1:
                 return (str(value) + ' ' + type_str).strip()

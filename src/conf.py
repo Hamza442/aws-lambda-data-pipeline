@@ -78,3 +78,26 @@ seller_type_config = {
 }
 
 excluded_words = ['4Wd', '2WD', 'AWD', '2X2', '4X4', '4X2', 'FWD']
+
+cols_to_map=['year','doors', 'body_type', 'transmission', 'no_of_cylinders', 'fuel_type', 'gears', 'seats', 'colour_in','make', 'model', 'spec']
+
+cols_to_mapping_tbl = {
+                  'year':'bb_modelyear'
+                  ,'doors':'bb_doors'
+                  ,'seats':'bb_seats'
+                  ,'gears':'bb_gears'
+                  ,'no_of_cylinders':'bb_noofcyls'
+                  ,'fuel_type':'bb_fuel'
+                  ,'body_type':'bb_body'
+                  ,'engine_size':'bb_enginesize'
+                  ,'transmission':'bb_transmissions'
+                  ,'make':'bb_make'
+                  ,'model': 'bb_model'
+                  ,'spec': 'bb_specifications'
+                }
+
+rename_mastercode_cache = {'model_year': 'year_id', 'make': 'make_id', 'model': 'model_id', 'doors': 'doors_id', 
+               'body_type': 'body_type_id', 'transmission': 'transmission_id', 'no_of_cyls': 'no_of_cylinders_id', 
+               'fuel': 'fuel_type_id', 'gears': 'gears_id', 'seats': 'seats_id', 'spec': 'spec_id'}
+
+COMPOSITE_KEY = ['year_id', 'make_id', 'model_id', 'doors_id', 'body_type_id', 'transmission_id', 'no_of_cylinders_id', 'fuel_type_id', 'gears_id', 'seats_id','spec_id']
