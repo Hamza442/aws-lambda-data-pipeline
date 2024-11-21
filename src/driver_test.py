@@ -41,8 +41,8 @@ HOST = "127.0.0.1"
 # ,
 mapping_tables_names = ['bb_modelyear', 'bb_doors', 'bb_seats', 'bb_gears', 'bb_noofcyls', 'bb_hp', 'bb_fuel', 'bb_body', 'bb_enginesize', 'bb_transmissions','bb_make','bb_model','bb_specifications','mastercodes_cache']
 
-ACCESS_KEY = 'AKIAQFBJES7PFU5PQMDW'
-SECRET_KEY = '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'
+ACCESS_KEY = ''
+SECRET_KEY = ''
 
 s3 = boto3.client('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=region)
 dynamodb = boto3.resource(
